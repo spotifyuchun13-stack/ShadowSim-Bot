@@ -1,0 +1,72 @@
+version: "3.9"
+
+services:
+  bot:
+    build: .
+    container_name: seenuz_bot
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - seenuz_net
+
+  db:
+    image: postgres:15-alpine
+    container_name: seenuz_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: seenuz_bot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-securepassword}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - seenuz_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: seenuz_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redispassword}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - seenuz_net
+
+  # Optional: Adminer for DB management
+  adminer:
+    image: adminer
+    container_name: seenuz_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    networks:
+      - seenuz_net
+    profiles:
+      - dev
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  seenuz_net:
+    driver: bridge
